@@ -567,7 +567,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   Widget _buildAdmin() {
     final pendingTier = tierRequests.where((r) => r['status'] == 'pending').length;
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('관리자'),
@@ -596,10 +596,11 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                 ],
               ])),
               const Tab(text: '세탁 관리'),
+              const Tab(text: '물물찬'),
             ],
           ),
         ),
-        body: TabBarView(children: [_adminRoomTab(), _adminScoreTab(), _adminTierTab(), _adminLaundryTab()]),
+        body: TabBarView(children: [_adminRoomTab(), _adminScoreTab(), _adminTierTab(), _adminLaundryTab(), _adminTradeTab()]),
       ),
     );
   }
@@ -997,6 +998,107 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
               const SizedBox(height: 16),
               adminGroup('B', '🅑 구역 (오른쪽)'),
             ]),
+          ),
+        ),
+    ]);
+  }
+
+  // ── 관리자 물물찬 탭 ───────────────────────────────────────────────────────
+  Widget _adminTradeTab() {
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                final ok = await showDialog<bool>(context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('물물찬 전체 초기화'),
+                    content: const Text('모든 물건과 교환 신청을 삭제합니다.\n이 작업은 되돌릴 수 없습니다.'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                        child: const Text('초기화'),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok == true) await _post('/api/admin/trade/reset', {});
+              },
+              icon: const Icon(Icons.delete_sweep, color: Colors.red, size: 16),
+              label: const Text('전체 초기화', style: TextStyle(color: Colors.red, fontSize: 13)),
+              style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
+            ),
+          ),
+        ]),
+      ),
+      const Divider(height: 1),
+      if (tradeItems.isEmpty)
+        const Expanded(child: Center(child: Text('등록된 물건이 없습니다', style: TextStyle(color: Colors.grey))))
+      else
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(12),
+            itemCount: tradeItems.length,
+            itemBuilder: (_, i) {
+              final item = tradeItems[i];
+              final reqs = tradeRequests.where((r) => r['item_id'] == item['id']).toList();
+              final statusColor = item['status'] == 'available'
+                  ? Colors.amber : item['status'] == 'traded' ? Colors.blue : Colors.green;
+              final statusText = item['status'] == 'available'
+                  ? '교환 가능' : item['status'] == 'traded' ? '교환 확정' : '완료';
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: statusColor.withOpacity(0.15),
+                    child: Text(item['room'].toString(),
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: statusColor)),
+                  ),
+                  title: Text(item['item_name'],
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  subtitle: Text(
+                    '원함: ${item['want_item']}  ·  ${item['name']}  ·  신청 ${reqs.length}건',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(statusText,
+                          style: TextStyle(fontSize: 11, color: statusColor, fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                      onPressed: () async {
+                        final ok = await showDialog<bool>(context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: Text('"${item['item_name']}" 삭제'),
+                            content: const Text('이 물건과 관련된 교환 신청도 모두 삭제됩니다.'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+                              ElevatedButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                                child: const Text('삭제'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (ok == true) await _post('/api/admin/trade/delete', {'item_id': item['id']});
+                      },
+                    ),
+                  ]),
+                ),
+              );
+            },
           ),
         ),
     ]);
@@ -2831,7 +2933,7 @@ class _TradePageState extends State<TradePage> {
       'room': widget.myRoom, 'name': widget.myName,
       'item_name': item, 'want_item': want,
     });
-    _snack('🎉 물건을 올렸습니다!');
+    _snack('물건을 올렸습니다!');
   }
 
   // ── 교환 신청 (IME 버그 수정) ─────────────────────────────────────────────
@@ -2900,7 +3002,7 @@ class _TradePageState extends State<TradePage> {
       'item_id': item['id'], 'from_room': widget.myRoom,
       'from_name': widget.myName, 'offer_item': offer,
     });
-    _snack('✅ 교환 신청했습니다!');
+    _snack('교환 신청했습니다!');
   }
 
   // ── 아이템 상세 바텀시트 ──────────────────────────────────────────────────
@@ -2992,7 +3094,7 @@ class _TradePageState extends State<TradePage> {
                   const Row(children: [
                     Icon(Icons.check_circle, color: Colors.green, size: 18),
                     SizedBox(width: 6),
-                    Text('교환 확정!', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 15)),
+                    Text('교환 확정', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 15)),
                   ]),
                   const SizedBox(height: 6),
                   Text('${accepted.first['from_room']}호 ${accepted.first['from_name']} · ${accepted.first['offer_item']}'),
@@ -3015,7 +3117,7 @@ class _TradePageState extends State<TradePage> {
                     onPressed: () async {
                       Navigator.pop(ctx);
                       await _post('/api/trade/complete', {'item_id': item['id']});
-                      _snack('🤝 교환 완료!');
+                      _snack('교환 완료!');
                     },
                     icon: const Icon(Icons.handshake),
                     label: const Text('교환 완료 처리'),
@@ -3113,7 +3215,7 @@ class _TradePageState extends State<TradePage> {
                             await _post('/api/trade/accept', {
                               'request_id': r['id'], 'meet_place': meetResult ?? '',
                             });
-                            _snack('🎉 교환 수락했습니다!');
+                            _snack('교환 수락했습니다!');
                           },
                           style: ElevatedButton.styleFrom(backgroundColor: Colors.amber,
                               foregroundColor: Colors.white,
@@ -3213,13 +3315,9 @@ class _TradePageState extends State<TradePage> {
                     padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       const SizedBox(height: 36),
-                      const Row(children: [
-                        Text('🔄', style: TextStyle(fontSize: 28)),
-                        SizedBox(width: 10),
-                        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text('물물찬', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                          Text('기숙사 물물교환 마켓', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                        ]),
+                      const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('물물찬', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                        Text('기숙사 물물교환 마켓', style: TextStyle(color: Colors.white70, fontSize: 12)),
                       ]),
                     ]),
                   ),
@@ -3266,7 +3364,7 @@ class _TradePageState extends State<TradePage> {
 
                 // ── 내 신청 현황 ────────────────────────────────────────────
                 if (myAccepted.isNotEmpty || myPending.isNotEmpty) ...[
-                  _sectionTitle('📋 내 신청 현황'),
+                  _sectionTitle('내 신청 현황'),
                   const SizedBox(height: 8),
                   ...myAccepted.map((r) {
                     final item = _items.firstWhere((t) => t['id'] == r['item_id'], orElse: () => <String, dynamic>{});
@@ -3302,7 +3400,7 @@ class _TradePageState extends State<TradePage> {
                 if (available.isEmpty && traded.isEmpty && myPending.isEmpty && myAccepted.isEmpty)
                   _emptyState()
                 else if (available.isNotEmpty) ...[
-                  _sectionTitle('🟡 교환 가능한 물건 ${available.length}개'),
+                  _sectionTitle('교환 가능한 물건 ${available.length}개'),
                   const SizedBox(height: 10),
                   GridView.builder(
                     shrinkWrap: true,
@@ -3319,7 +3417,7 @@ class _TradePageState extends State<TradePage> {
 
                 // ── 교환 확정 대기 ───────────────────────────────────────────
                 if (traded.isNotEmpty) ...[
-                  _sectionTitle('🤝 교환 확정 대기'),
+                  _sectionTitle('교환 확정 대기'),
                   const SizedBox(height: 8),
                   ...traded.map((item) {
                     final acc = _requests.firstWhere((r) =>
