@@ -1,0 +1,7 @@
+services:
+  tabangchan:
+    build: .
+    container_name: tabangchan
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
