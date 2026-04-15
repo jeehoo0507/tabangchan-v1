@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:js_util' as js_util;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -164,12 +166,29 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
 
   // ── 폴링 ───────────────────────────────────────────────────────────────────
 
+  static const _vapidPublicKey =
+      'BAi0LZJZwc6pSv9-PocK2b7vcvgELRl_1Lh2BO0yxp6QQgaeUwQ4pXuxCsVuDA0OLrnHCYovZzBy6OFGyHdcjfc';
+
   void _startPolling() {
     try {
-      if (html.Notification.supported) html.Notification.requestPermission();
+      if (html.Notification.supported) {
+        html.Notification.requestPermission().then((_) => _subscribePush());
+      }
     } catch (_) {}
     _poll();
     _timer = Timer.periodic(const Duration(seconds: 2), (_) => _poll());
+  }
+
+  Future<void> _subscribePush() async {
+    try {
+      if (myRoom == null || isAdmin) return;
+      final promise = js_util.callMethod(html.window, 'subscribePush', [_vapidPublicKey]);
+      final sub = await js_util.promiseToFuture<String>(promise);
+      await _rawPost('/api/push/subscribe', {
+        'room': myRoom,
+        'subscription': jsonDecode(sub),
+      });
+    } catch (_) {}
   }
 
   void _showNotification(String title, String body) {
@@ -815,6 +834,96 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       });
     }
 
+    Map? getMachine(String group, int slot, String type) {
+      try { return machines.firstWhere((m) => m['group'] == group && m['slot'] == slot && m['type'] == type) as Map; }
+      catch (_) { return null; }
+    }
+
+    Widget adminCard(Map? m, double cardW) {
+      if (m == null) return SizedBox(width: cardW, height: 120);
+      final status = m['status'] as String;
+      final endTime = (m['end_time'] as num?)?.toDouble();
+      final now = DateTime.now().millisecondsSinceEpoch / 1000.0;
+      final remaining = endTime != null && status == 'running'
+          ? (endTime - now).clamp(0.0, double.infinity).toInt() : null;
+      final isIdle = status == 'idle';
+      final isRunning = status == 'running' && (remaining == null || remaining > 0);
+      final isDone = status == 'done' || (status == 'running' && remaining == 0);
+      final isWasher = m['type'] == 'washer';
+      final room = (m['room'] as String?) ?? '';
+
+      Color bgColor = isIdle ? Colors.white : isRunning ? Colors.blue[50]! : Colors.orange[50]!;
+      Color borderColor = isIdle ? Colors.grey[300]! : isRunning ? Colors.blue[300]! : Colors.orange[400]!;
+      Color iconColor = isIdle ? Colors.grey[400]! : isRunning ? Colors.blue : Colors.orange;
+
+      return GestureDetector(
+        onTap: () => setMachine(m),
+        child: Container(
+          width: cardW, height: 120,
+          decoration: BoxDecoration(
+            color: bgColor,
+            border: Border.all(color: borderColor, width: isIdle ? 1 : 2),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(isWasher ? Icons.local_laundry_service : Icons.dry, size: 22, color: iconColor),
+            const SizedBox(height: 2),
+            if (isIdle)
+              Text(isWasher ? '세탁기' : '건조기',
+                  style: TextStyle(fontSize: 9, color: Colors.grey[500])),
+            if (isRunning && remaining != null) ...[
+              Text('${remaining ~/ 60}:${(remaining % 60).toString().padLeft(2, '0')}',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue)),
+              if (room.isNotEmpty)
+                Text('$room호', style: TextStyle(fontSize: 9, color: Colors.grey[500])),
+            ],
+            if (isDone) ...[
+              Text('완료', style: TextStyle(fontSize: 10, color: Colors.orange[700], fontWeight: FontWeight.bold)),
+              if (room.isNotEmpty)
+                Text('$room호', style: TextStyle(fontSize: 9, color: Colors.grey[500])),
+            ],
+            const SizedBox(height: 4),
+            // 관리자 버튼
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              InkWell(
+                onTap: () => setMachine(m),
+                child: const Icon(Icons.edit_outlined, size: 14, color: Colors.blueGrey),
+              ),
+              if (!isIdle) ...[
+                const SizedBox(width: 6),
+                InkWell(
+                  onTap: () => resetOne(m['id'] as String),
+                  child: const Icon(Icons.restart_alt, size: 14, color: Colors.red),
+                ),
+              ],
+            ]),
+          ]),
+        ),
+      );
+    }
+
+    Widget adminGroup(String group, String label) {
+      return LayoutBuilder(builder: (_, constraints) {
+        final cardW = ((constraints.maxWidth - 24) / 4).clamp(60.0, 90.0);
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 8, 0, 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
+              child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            ),
+          ),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: List.generate(4, (i) => adminCard(getMachine(group, i+1, 'dryer'), cardW))),
+          const SizedBox(height: 8),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: List.generate(4, (i) => adminCard(getMachine(group, i+1, 'washer'), cardW))),
+        ]);
+      });
+    }
+
     return Column(children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
@@ -877,50 +986,13 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         const Expanded(child: Center(child: Text('데이터 로딩 중...')))
       else
         Expanded(
-          child: ListView.builder(
-            itemCount: machines.length,
-            itemBuilder: (ctx, i) {
-              final m = machines[i] as Map;
-              final status = m['status'] as String;
-              final sColor = _statusColor(status);
-              final endTime = (m['end_time'] as num?)?.toDouble();
-              final now = DateTime.now().millisecondsSinceEpoch / 1000.0;
-              final remaining = (endTime != null && status == 'running')
-                  ? (endTime - now).clamp(0.0, double.infinity).toInt()
-                  : null;
-              return ListTile(
-                dense: true,
-                leading: CircleAvatar(
-                  radius: 16,
-                  backgroundColor: sColor.withOpacity(0.15),
-                  child: Icon(
-                    m['type'] == 'washer' ? Icons.local_laundry_service : Icons.dry,
-                    size: 16, color: sColor,
-                  ),
-                ),
-                title: Text(_label(m), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                subtitle: Text(
-                  status == 'idle' ? '비어있음'
-                    : status == 'running' && remaining != null
-                        ? '${m['room']}호 · 남은 시간 ${remaining ~/ 60}분 ${remaining % 60}초'
-                        : '${m['room']}호 · 완료',
-                  style: TextStyle(fontSize: 11, color: sColor),
-                ),
-                trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    tooltip: '설정',
-                    onPressed: () => setMachine(m),
-                  ),
-                  if (status != 'idle')
-                    IconButton(
-                      icon: const Icon(Icons.restart_alt, size: 18, color: Colors.red),
-                      tooltip: '초기화',
-                      onPressed: () => resetOne(m['id'] as String),
-                    ),
-                ]),
-              );
-            },
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(12),
+            child: Column(children: [
+              adminGroup('A', '🅐 구역 (왼쪽)'),
+              const SizedBox(height: 16),
+              adminGroup('B', '🅑 구역 (오른쪽)'),
+            ]),
           ),
         ),
     ]);

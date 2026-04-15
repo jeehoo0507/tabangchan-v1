@@ -1,11 +1,35 @@
 #!/usr/bin/env python3
-import json, time
+import json, time, threading
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from collections import defaultdict
 
 # ── 보안 설정 ──────────────────────────────────────────────────────────────────
 ADMIN_TOKEN = "tbchan_9x2kL8mP_secret"   # admin API 인증 토큰
 _rate_data  = defaultdict(list)            # ip -> [timestamp, ...]
+
+# ── Web Push (VAPID) ───────────────────────────────────────────────────────────
+VAPID_PUBLIC  = "BAi0LZJZwc6pSv9-PocK2b7vcvgELRl_1Lh2BO0yxp6QQgaeUwQ4pXuxCsVuDA0OLrnHCYovZzBy6OFGyHdcjfc"
+VAPID_PRIVATE = "EU_tIUVoW9YlH3TEYJ9n9P8DWS5SQnqPixuONZcyH40"
+VAPID_CLAIMS  = {"sub": "mailto:tabangchan@tabangchan.site"}
+
+_push_subs = {}   # room -> subscription_info dict
+
+def _send_push(room, title, body):
+    """room에 등록된 구독에 푸시 전송 (별도 스레드)"""
+    sub = _push_subs.get(room)
+    if not sub: return
+    def _do():
+        try:
+            from pywebpush import webpush, WebPushException
+            webpush(
+                subscription_info=sub,
+                data=json.dumps({"title": title, "body": body}),
+                vapid_private_key=VAPID_PRIVATE,
+                vapid_claims=VAPID_CLAIMS,
+            )
+        except Exception as e:
+            print(f"push 실패 ({room}): {e}")
+    threading.Thread(target=_do, daemon=True).start()
 
 def _rate_ok(ip, limit=60, window=60):
     """60초에 60회 초과 시 차단"""
@@ -105,19 +129,35 @@ class Handler(SimpleHTTPRequestHandler):
             self._json({"ok": False, "error": "bad_request"})
             return
 
-        if self.path == "/api/request":
+        if self.path == "/api/push/subscribe":
+            room = body.get("room", "")
+            sub  = body.get("subscription")
+            if room and sub:
+                _push_subs[room] = sub
+            self._json({"ok": True}); return
+
+        elif self.path == "/api/push/unsubscribe":
+            room = body.get("room", "")
+            _push_subs.pop(room, None)
+            self._json({"ok": True}); return
+
+        elif self.path == "/api/request":
             fr, to = body["from"], body["to"]
             if not any(r["from_room"] == fr and r["status"] == "pending" for r in state["requests"]):
                 state["requests"].append({
                     "id": _id(), "from_room": fr, "to_room": to,
                     "status": "pending", "name": body.get("name",""), "reason": body.get("reason",""),
                 })
+                # 방문 대상 방에 push 알림
+                name = body.get("name", fr)
+                _send_push(to, "🚪 타방 신청 도착!", f"{fr}호 {name}님이 방문 신청했습니다.")
 
         elif self.path == "/api/approve":
-            # 승인만 표시 - 실제 인원/히스토리는 이동완료 시 반영
             for r in state["requests"]:
                 if r["id"] == body["id"] and r["status"] == "pending":
                     r["status"] = "approved"
+                    # 신청자 방에 push 알림
+                    _send_push(r["from_room"], "✅ 타방 승인됨!", f"{r['to_room']}호 방문이 승인되었습니다.")
                     break
 
         elif self.path == "/api/complete_move":

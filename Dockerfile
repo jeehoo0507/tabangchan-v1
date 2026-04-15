@@ -26,6 +26,8 @@ WORKDIR /app
 COPY server.py .
 COPY --from=builder /app/build/web ./build/web
 
+RUN pip install --no-cache-dir pywebpush
+
 EXPOSE 8080
 
 CMD ["python3", "server.py"]
