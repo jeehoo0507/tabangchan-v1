@@ -69,6 +69,8 @@ state = {
     "laundry": _init_laundry(),
     "streak_dates": {},   # room -> ["YYYY-MM-DD", ...]
     "laundry_schedule": {"월":[],"화":[],"수":[],"목":[],"금":[],"토":[],"일":[]},
+    "trade_items": [],    # [{id, room, name, item_name, want_item, status, time}]
+    "trade_requests": [], # [{id, item_id, from_room, from_name, offer_item, status, meet_place, time}]
 }
 
 def _update_laundry():
@@ -304,6 +306,93 @@ class Handler(SimpleHTTPRequestHandler):
                     m["room"] = body.get("room", "")
                     m["name"] = body.get("room", "")
                     break
+
+        # ── 물물찬 ──────────────────────────────────────────────────────────────
+
+        elif self.path == "/api/trade/post":
+            room = body.get("room", "")
+            item_name = body.get("item_name", "").strip()
+            want_item = body.get("want_item", "").strip()
+            if room and item_name and want_item:
+                state["trade_items"].append({
+                    "id": _id(), "room": room, "name": body.get("name", ""),
+                    "item_name": item_name, "want_item": want_item,
+                    "status": "available", "time": _now(),
+                })
+
+        elif self.path == "/api/trade/delete_item":
+            iid = body["item_id"]
+            room = body.get("room", "")
+            state["trade_items"] = [
+                t for t in state["trade_items"]
+                if not (t["id"] == iid and t["room"] == room)
+            ]
+            state["trade_requests"] = [r for r in state["trade_requests"] if r["item_id"] != iid]
+
+        elif self.path == "/api/trade/request":
+            iid = body["item_id"]
+            fr = body["from_room"]
+            # 이미 신청한 경우 무시
+            if not any(r["item_id"] == iid and r["from_room"] == fr for r in state["trade_requests"]):
+                req = {
+                    "id": _id(), "item_id": iid, "from_room": fr,
+                    "from_name": body.get("from_name", ""),
+                    "offer_item": body.get("offer_item", "").strip(),
+                    "status": "pending", "meet_place": "", "time": _now(),
+                }
+                state["trade_requests"].append(req)
+                # 물건 주인에게 push 알림
+                item = next((t for t in state["trade_items"] if t["id"] == iid), None)
+                if item:
+                    _send_push(item["room"], "🔄 물물 교환 신청!", f"{fr}호 {req['from_name']}님이 교환을 신청했습니다.")
+
+        elif self.path == "/api/trade/accept":
+            rid = body["request_id"]
+            meet = body.get("meet_place", "").strip()
+            for r in state["trade_requests"]:
+                if r["id"] == rid and r["status"] == "pending":
+                    r["status"] = "accepted"
+                    r["meet_place"] = meet
+                    # 물건 상태 traded로
+                    for t in state["trade_items"]:
+                        if t["id"] == r["item_id"]:
+                            t["status"] = "traded"
+                            break
+                    # 신청자에게 push 알림
+                    _send_push(r["from_room"], "✅ 교환 승인됨!", f"교환이 승인되었습니다. {meet or '장소 미정'}")
+                    break
+            # 나머지 pending 신청 거절
+            item_id = next((r["item_id"] for r in state["trade_requests"] if r["id"] == rid), None)
+            if item_id:
+                for r in state["trade_requests"]:
+                    if r["item_id"] == item_id and r["id"] != rid and r["status"] == "pending":
+                        r["status"] = "rejected"
+
+        elif self.path == "/api/trade/reject":
+            rid = body["request_id"]
+            state["trade_requests"] = [r for r in state["trade_requests"] if r["id"] != rid]
+
+        elif self.path == "/api/trade/cancel":
+            rid = body["request_id"]
+            fr = body.get("from_room", "")
+            state["trade_requests"] = [
+                r for r in state["trade_requests"]
+                if not (r["id"] == rid and r["from_room"] == fr)
+            ]
+
+        elif self.path == "/api/trade/complete":
+            iid = body["item_id"]
+            state["trade_items"] = [t for t in state["trade_items"] if t["id"] != iid]
+            state["trade_requests"] = [r for r in state["trade_requests"] if r["item_id"] != iid]
+
+        elif self.path == "/api/admin/trade/delete":
+            iid = body["item_id"]
+            state["trade_items"] = [t for t in state["trade_items"] if t["id"] != iid]
+            state["trade_requests"] = [r for r in state["trade_requests"] if r["item_id"] != iid]
+
+        elif self.path == "/api/admin/trade/reset":
+            state["trade_items"] = []
+            state["trade_requests"] = []
 
         self._json({"ok": True})
 
