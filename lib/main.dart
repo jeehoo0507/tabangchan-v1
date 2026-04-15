@@ -2698,6 +2698,22 @@ class _LaundryPageState extends State<LaundryPage> {
 
 // ── 물물찬 페이지 ─────────────────────────────────────────────────────────────
 
+// 물건 카테고리 이모지
+String _tradeEmoji(String name) {
+  final n = name.toLowerCase();
+  if (n.contains('라면') || n.contains('국수') || n.contains('짜장') || n.contains('우동')) return '🍜';
+  if (n.contains('밥') || n.contains('쌀') || n.contains('컵밥')) return '🍚';
+  if (n.contains('과자') || n.contains('쿠키') || n.contains('초코') || n.contains('사탕')) return '🍪';
+  if (n.contains('음료') || n.contains('주스') || n.contains('커피') || n.contains('물') || n.contains('콜라')) return '🥤';
+  if (n.contains('젓가락') || n.contains('포크') || n.contains('숟가락') || n.contains('수저')) return '🥢';
+  if (n.contains('샴푸') || n.contains('비누') || n.contains('세제') || n.contains('치약') || n.contains('칫솔')) return '🧴';
+  if (n.contains('충전기') || n.contains('케이블') || n.contains('이어폰')) return '🔌';
+  if (n.contains('책') || n.contains('노트') || n.contains('펜') || n.contains('연필')) return '📚';
+  if (n.contains('옷') || n.contains('양말') || n.contains('속옷')) return '👕';
+  if (n.contains('우산')) return '☂️';
+  return '📦';
+}
+
 class TradePage extends StatefulWidget {
   final String myRoom, myName, base;
   const TradePage({super.key, required this.myRoom, required this.myName, required this.base});
@@ -2739,283 +2755,426 @@ class _TradePageState extends State<TradePage> {
     } catch (_) {}
   }
 
-  void _snack(String msg) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
 
-  // 물건 올리기
+  // ── 물건 올리기 (한국어 IME 버그 수정: onChanged로 값 추적) ───────────────
   Future<void> _postItem() async {
-    final itemCtrl = TextEditingController();
-    final wantCtrl = TextEditingController();
-    final ok = await showDialog<bool>(
+    String itemVal = '';
+    String wantVal = '';
+    final result = await showDialog<Map<String, String>>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('물건 올리기'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-            controller: itemCtrl,
-            decoration: InputDecoration(
-              labelText: '내 물건 이름', hintText: '예: 신라면 2개',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: Colors.amber[50], shape: BoxShape.circle),
+              child: const Text('📦', style: TextStyle(fontSize: 20)),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: wantCtrl,
-            decoration: InputDecoration(
-              labelText: '원하는 물건', hintText: '예: 젓가락, 음료수 등',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            const SizedBox(width: 10),
+            const Text('물건 올리기', style: TextStyle(fontWeight: FontWeight.bold)),
+          ]),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+              autofocus: true,
+              onChanged: (v) => itemVal = v,
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                labelText: '내 물건 이름', hintText: '예: 신라면 2개',
+                prefixIcon: const Icon(Icons.inventory_2_outlined, color: Colors.amber),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Colors.amber, width: 2),
+                ),
+              ),
             ),
-          ),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.white),
-            child: const Text('올리기'),
-          ),
-        ],
-      ),
+            const SizedBox(height: 12),
+            TextField(
+              onChanged: (v) => wantVal = v,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => Navigator.pop(ctx, {'item': itemVal, 'want': wantVal}),
+              decoration: InputDecoration(
+                labelText: '원하는 물건', hintText: '예: 젓가락, 음료수',
+                prefixIcon: const Icon(Icons.search, color: Colors.amber),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Colors.amber, width: 2),
+                ),
+              ),
+            ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.pop(ctx, {'item': itemVal, 'want': wantVal}),
+              icon: const Icon(Icons.upload, size: 16),
+              label: const Text('올리기'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber, foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
+        );
+      },
     );
-    if (ok != true) return;
-    if (itemCtrl.text.trim().isEmpty || wantCtrl.text.trim().isEmpty) {
-      _snack('물건명과 원하는 물건을 입력해주세요.'); return;
-    }
+    if (result == null) return;
+    final item = result['item']?.trim() ?? '';
+    final want = result['want']?.trim() ?? '';
+    if (item.isEmpty || want.isEmpty) { _snack('물건명과 원하는 물건을 입력해주세요.'); return; }
     await _post('/api/trade/post', {
       'room': widget.myRoom, 'name': widget.myName,
-      'item_name': itemCtrl.text.trim(), 'want_item': wantCtrl.text.trim(),
+      'item_name': item, 'want_item': want,
     });
-    _snack('물건을 올렸습니다!');
+    _snack('🎉 물건을 올렸습니다!');
   }
 
-  // 교환 신청
+  // ── 교환 신청 (IME 버그 수정) ─────────────────────────────────────────────
   Future<void> _requestTrade(Map item) async {
-    final offerCtrl = TextEditingController();
-    final ok = await showDialog<bool>(
+    String offerVal = '';
+    final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('${item['item_name']} 교환 신청'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(children: [
+          Text(_tradeEmoji(item['item_name']), style: const TextStyle(fontSize: 22)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(item['item_name'],
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              maxLines: 1, overflow: TextOverflow.ellipsis)),
+        ]),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: Colors.amber[50], borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [Colors.amber[50]!, Colors.orange[50]!]),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.amber[200]!),
+            ),
             child: Row(children: [
-              const Icon(Icons.swap_horiz, color: Colors.amber),
+              const Icon(Icons.emoji_objects_outlined, color: Colors.amber, size: 18),
               const SizedBox(width: 8),
               Expanded(child: Text('${item['room']}호가 원하는 것: ${item['want_item']}',
-                  style: const TextStyle(fontSize: 13))),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
             ]),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           TextField(
-            controller: offerCtrl,
+            autofocus: true,
+            onChanged: (v) => offerVal = v,
+            onSubmitted: (_) => Navigator.pop(ctx, offerVal),
             decoration: InputDecoration(
               labelText: '내가 줄 물건', hintText: '예: 컵라면 1개',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              prefixIcon: const Icon(Icons.swap_horiz, color: Colors.amber),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Colors.amber, width: 2),
+              ),
             ),
           ),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.white),
-            child: const Text('신청하기'),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(ctx, offerVal),
+            icon: const Icon(Icons.send, size: 16),
+            label: const Text('신청하기'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.amber, foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
           ),
         ],
       ),
     );
-    if (ok != true) return;
-    if (offerCtrl.text.trim().isEmpty) { _snack('줄 물건을 입력해주세요.'); return; }
+    if (result == null) return;
+    final offer = result.trim();
+    if (offer.isEmpty) { _snack('줄 물건을 입력해주세요.'); return; }
     await _post('/api/trade/request', {
       'item_id': item['id'], 'from_room': widget.myRoom,
-      'from_name': widget.myName, 'offer_item': offerCtrl.text.trim(),
+      'from_name': widget.myName, 'offer_item': offer,
     });
-    _snack('교환 신청했습니다!');
+    _snack('✅ 교환 신청했습니다!');
   }
 
-  // 아이템 상세 (내 물건이면 신청 목록, 남의 물건이면 신청 버튼)
+  // ── 아이템 상세 바텀시트 ──────────────────────────────────────────────────
   void _showItemDetail(Map item) {
     final isOwner = item['room'] == widget.myRoom;
     final itemReqs = _requests.where((r) => r['item_id'] == item['id']).toList();
     final myReq = itemReqs.where((r) => r['from_room'] == widget.myRoom).toList();
     final accepted = itemReqs.where((r) => r['status'] == 'accepted').toList();
+    final pending = itemReqs.where((r) => r['status'] == 'pending').toList();
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Icon(Icons.swap_horiz, color: Colors.amber),
-            const SizedBox(width: 8),
-            Expanded(child: Text(item['item_name'],
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-            if (isOwner)
-              IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.red),
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  await _post('/api/trade/delete_item', {'item_id': item['id'], 'room': widget.myRoom});
-                  _snack('삭제했습니다.');
-                },
-              ),
-          ]),
-          Text('${item['room']}호 · ${item['time']}', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(color: Colors.amber[50], borderRadius: BorderRadius.circular(8)),
-            child: Row(children: [
-              const Text('원하는 것: ', style: TextStyle(fontSize: 13, color: Colors.grey)),
-              Text(item['want_item'], style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-            ]),
-          ),
-          const SizedBox(height: 16),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        minChildSize: 0.4,
+        expand: false,
+        builder: (_, scrollCtrl) => ListView(
+          controller: scrollCtrl,
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
+          children: [
+            // 드래그 핸들
+            Center(child: Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(4)),
+            )),
+            const SizedBox(height: 16),
 
-          // 교환 완료된 경우
-          if (accepted.isNotEmpty) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(8)),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('✅ 교환 확정!', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-                Text('${accepted.first['from_room']}호 ${accepted.first['from_name']}님 · ${accepted.first['offer_item']}'),
-                if ((accepted.first['meet_place'] as String).isNotEmpty)
-                  Text('만남 장소: ${accepted.first['meet_place']}',
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-              ]),
-            ),
-            const SizedBox(height: 12),
-            if (isOwner)
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
+            // 헤더
+            Row(children: [
+              Container(
+                width: 52, height: 52,
+                decoration: BoxDecoration(
+                  color: isOwner ? Colors.amber[100] : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: Text(_tradeEmoji(item['item_name']), style: const TextStyle(fontSize: 28)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(item['item_name'],
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                Text('${item['room']}호 · ${item['time']}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+              ])),
+              if (isOwner)
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
                   onPressed: () async {
                     Navigator.pop(ctx);
-                    await _post('/api/trade/complete', {'item_id': item['id']});
-                    _snack('교환 완료!');
+                    await _post('/api/trade/delete_item', {'item_id': item['id'], 'room': widget.myRoom});
+                    _snack('삭제했습니다.');
                   },
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-                  child: const Text('교환 완료 처리'),
                 ),
-              ),
-          ],
+            ]),
+            const SizedBox(height: 14),
 
-          // 내 물건 - 신청 목록
-          if (isOwner && accepted.isEmpty) ...[
-            Text('교환 신청 (${itemReqs.where((r) => r['status'] == 'pending').length}건)',
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            if (itemReqs.where((r) => r['status'] == 'pending').isEmpty)
-              const Text('아직 신청이 없습니다.', style: TextStyle(color: Colors.grey)),
-            ...itemReqs.where((r) => r['status'] == 'pending').map((r) => Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
+            // 원하는 물건
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [Colors.amber[50]!, Colors.orange[50]!]),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.amber[200]!),
+              ),
+              child: Row(children: [
+                const Icon(Icons.emoji_objects_outlined, color: Colors.amber, size: 18),
+                const SizedBox(width: 8),
+                const Text('원하는 것 ', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                Expanded(child: Text(item['want_item'],
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold))),
+              ]),
+            ),
+            const SizedBox(height: 20),
+
+            // 교환 확정 표시
+            if (accepted.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green[200]!),
+                ),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('${r['from_room']}호 ${r['from_name']}',
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  Text('줄 물건: ${r['offer_item']}'),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () async {
-                          Navigator.pop(ctx);
-                          await _post('/api/trade/reject', {'request_id': r['id']});
-                        },
-                        style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-                        child: const Text('거절'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          Navigator.pop(ctx);
-                          final meetCtrl = TextEditingController();
-                          final meetPlace = await showDialog<String>(
-                            context: context,
-                            builder: (ctx2) => AlertDialog(
-                              title: const Text('만남 장소 (선택)'),
-                              content: TextField(
-                                controller: meetCtrl,
-                                decoration: InputDecoration(
-                                  hintText: '예: 1층 로비',
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                              ),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(ctx2, ''), child: const Text('건너뛰기')),
-                                ElevatedButton(
-                                  onPressed: () => Navigator.pop(ctx2, meetCtrl.text.trim()),
-                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.white),
-                                  child: const Text('확인'),
-                                ),
-                              ],
-                            ),
-                          );
-                          await _post('/api/trade/accept', {
-                            'request_id': r['id'], 'meet_place': meetPlace ?? '',
-                          });
-                          _snack('교환 수락했습니다!');
-                        },
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.white),
-                        child: const Text('수락'),
-                      ),
-                    ),
+                  const Row(children: [
+                    Icon(Icons.check_circle, color: Colors.green, size: 18),
+                    SizedBox(width: 6),
+                    Text('교환 확정!', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 15)),
                   ]),
+                  const SizedBox(height: 6),
+                  Text('${accepted.first['from_room']}호 ${accepted.first['from_name']} · ${accepted.first['offer_item']}'),
+                  if ((accepted.first['meet_place'] as String? ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(children: [
+                      const Icon(Icons.place, size: 14, color: Colors.green),
+                      const SizedBox(width: 4),
+                      Text('만남 장소: ${accepted.first['meet_place']}',
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ]),
+                  ],
                 ]),
               ),
-            )),
-          ],
+              const SizedBox(height: 12),
+              if (isOwner)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await _post('/api/trade/complete', {'item_id': item['id']});
+                      _snack('🤝 교환 완료!');
+                    },
+                    icon: const Icon(Icons.handshake),
+                    label: const Text('교환 완료 처리'),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green,
+                        foregroundColor: Colors.white, minimumSize: const Size(0, 48),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  ),
+                ),
+            ],
 
-          // 남의 물건 - 신청하기
-          if (!isOwner && accepted.isEmpty) ...[
-            if (myReq.isNotEmpty)
-              Column(children: [
+            // 내 물건 - 신청 목록
+            if (isOwner && accepted.isEmpty) ...[
+              Row(children: [
+                const Icon(Icons.inbox, size: 16, color: Colors.amber),
+                const SizedBox(width: 6),
+                Text('교환 신청 ${pending.length}건',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              ]),
+              const SizedBox(height: 8),
+              if (pending.isEmpty)
                 Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(8)),
-                  child: Row(children: [
-                    const Icon(Icons.hourglass_empty, color: Colors.blue, size: 16),
-                    const SizedBox(width: 8),
-                    Text('신청 중: ${myReq.first['offer_item']}'),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(10)),
+                  child: const Center(child: Text('아직 신청이 없어요 👀', style: TextStyle(color: Colors.grey))),
+                ),
+              ...pending.map((r) => Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: Colors.grey[200]!),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      CircleAvatar(radius: 14, backgroundColor: Colors.amber[100],
+                          child: Text(r['from_room'].toString(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber))),
+                      const SizedBox(width: 8),
+                      Text('${r['from_room']}호 ${r['from_name']}',
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ]),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(8)),
+                      child: Text('줄 물건: ${r['offer_item']}', style: const TextStyle(fontSize: 13)),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            Navigator.pop(ctx);
+                            await _post('/api/trade/reject', {'request_id': r['id']});
+                          },
+                          style: OutlinedButton.styleFrom(foregroundColor: Colors.red,
+                              side: const BorderSide(color: Colors.red),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                          child: const Text('거절'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            Navigator.pop(ctx);
+                            String meetVal = '';
+                            final meetResult = await showDialog<String>(
+                              context: context,
+                              builder: (ctx2) => AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                title: const Text('만남 장소 (선택)'),
+                                content: TextField(
+                                  autofocus: true,
+                                  onChanged: (v) => meetVal = v,
+                                  onSubmitted: (_) => Navigator.pop(ctx2, meetVal),
+                                  decoration: InputDecoration(
+                                    hintText: '예: 1층 로비, 세탁실 앞',
+                                    prefixIcon: const Icon(Icons.place, color: Colors.amber),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                ),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(ctx2, ''), child: const Text('건너뛰기')),
+                                  ElevatedButton(
+                                    onPressed: () => Navigator.pop(ctx2, meetVal),
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.white),
+                                    child: const Text('확인'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            await _post('/api/trade/accept', {
+                              'request_id': r['id'], 'meet_place': meetResult ?? '',
+                            });
+                            _snack('🎉 교환 수락했습니다!');
+                          },
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.amber,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                          child: const Text('수락'),
+                        ),
+                      ),
+                    ]),
                   ]),
                 ),
-                const SizedBox(height: 8),
+              )),
+            ],
+
+            // 남의 물건 - 신청하기
+            if (!isOwner && accepted.isEmpty) ...[
+              if (myReq.isNotEmpty) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.blue[200]!)),
+                  child: Row(children: [
+                    const Icon(Icons.hourglass_top, color: Colors.blue, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text('신청 중: ${myReq.first['offer_item']}',
+                        style: const TextStyle(fontWeight: FontWeight.w500))),
+                  ]),
+                ),
+                const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
                     onPressed: () async {
                       Navigator.pop(ctx);
-                      await _post('/api/trade/cancel', {
-                        'request_id': myReq.first['id'], 'from_room': widget.myRoom,
-                      });
+                      await _post('/api/trade/cancel', {'request_id': myReq.first['id'], 'from_room': widget.myRoom});
                       _snack('신청 취소했습니다.');
                     },
-                    style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                    style: OutlinedButton.styleFrom(foregroundColor: Colors.red,
+                        side: const BorderSide(color: Colors.red),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        minimumSize: const Size(0, 46)),
                     child: const Text('신청 취소'),
                   ),
                 ),
-              ])
-            else
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () { Navigator.pop(ctx); _requestTrade(item); },
-                  icon: const Icon(Icons.swap_horiz),
-                  label: const Text('교환 신청하기'),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 48)),
+              ] else
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () { Navigator.pop(ctx); _requestTrade(item); },
+                    icon: const Icon(Icons.swap_horiz),
+                    label: const Text('교환 신청하기'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.amber, foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
                 ),
-              ),
+            ],
           ],
-          const SizedBox(height: 8),
-        ]),
+        ),
       ),
     );
   }
@@ -3028,164 +3187,305 @@ class _TradePageState extends State<TradePage> {
         r['from_room'] == widget.myRoom && r['status'] == 'pending').toList();
     final myAccepted = _requests.where((r) =>
         r['from_room'] == widget.myRoom && r['status'] == 'accepted').toList();
+    final incomingCount = _items
+        .where((t) => t['room'] == widget.myRoom && t['status'] == 'available')
+        .fold<int>(0, (sum, t) => sum + (_requests.where((r) =>
+            r['item_id'] == t['id'] && r['status'] == 'pending').length as int));
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('물물찬'),
-        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _poll)],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _postItem,
-        icon: const Icon(Icons.add),
-        label: const Text('물건 올리기'),
-        backgroundColor: Colors.amber,
-        foregroundColor: Colors.white,
-      ),
-      body: _items.isEmpty && _requests.isEmpty
-          ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.swap_horiz, size: 64, color: Colors.amber[200]),
-              const SizedBox(height: 16),
-              const Text('아직 올라온 물건이 없어요', style: TextStyle(color: Colors.grey)),
-              const SizedBox(height: 8),
-              const Text('먼저 물건을 올려보세요!', style: TextStyle(color: Colors.grey, fontSize: 12)),
-            ]))
-          : SingleChildScrollView(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // 내 신청 현황
-          if (myPending.isNotEmpty || myAccepted.isNotEmpty) ...[
-            const Text('📋 내 신청 현황', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            const SizedBox(height: 8),
-            ...myAccepted.map((r) {
-              final item = _items.firstWhere((t) => t['id'] == r['item_id'], orElse: () => {});
-              return Card(
-                color: Colors.green[50],
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: const Icon(Icons.check_circle, color: Colors.green),
-                  title: Text('${item['item_name'] ?? '?'} ← ${r['offer_item']}'),
-                  subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('교환 확정! ${item['room'] ?? ''}호'),
-                    if ((r['meet_place'] as String? ?? '').isNotEmpty)
-                      Text('만남 장소: ${r['meet_place']}',
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ]),
-                ),
-              );
-            }),
-            ...myPending.map((r) {
-              final item = _items.firstWhere((t) => t['id'] == r['item_id'], orElse: () => {});
-              return Card(
-                color: Colors.blue[50],
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: const Icon(Icons.hourglass_empty, color: Colors.blue),
-                  title: Text('${item['item_name'] ?? '?'} ← ${r['offer_item']}'),
-                  subtitle: Text('${item['room'] ?? ''}호 · 승인 대기 중'),
-                  trailing: TextButton(
-                    onPressed: () async {
-                      await _post('/api/trade/cancel', {'request_id': r['id'], 'from_room': widget.myRoom});
-                    },
-                    child: const Text('취소', style: TextStyle(color: Colors.red)),
+      backgroundColor: const Color(0xFFFAFAFA),
+      body: CustomScrollView(
+        slivers: [
+          // ── 그라디언트 헤더 ────────────────────────────────────────────────
+          SliverAppBar(
+            expandedHeight: 140,
+            pinned: true,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFFFB300), Color(0xFFFF6F00)],
+                    begin: Alignment.topLeft, end: Alignment.bottomRight,
                   ),
                 ),
-              );
-            }),
-            const Divider(height: 24),
-          ],
-
-          // 교환 가능 목록
-          if (available.isNotEmpty) ...[
-            const Text('🟡 교환 가능', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            const SizedBox(height: 8),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2, childAspectRatio: 1.4,
-                crossAxisSpacing: 8, mainAxisSpacing: 8,
-              ),
-              itemCount: available.length,
-              itemBuilder: (_, i) {
-                final item = available[i];
-                final isOwner = item['room'] == widget.myRoom;
-                final hasMyReq = _requests.any((r) =>
-                    r['item_id'] == item['id'] && r['from_room'] == widget.myRoom);
-                final pendingCount = _requests.where((r) =>
-                    r['item_id'] == item['id'] && r['status'] == 'pending').length;
-
-                return GestureDetector(
-                  onTap: () => _showItemDetail(item),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: isOwner ? Colors.amber[50] : Colors.white,
-                      border: Border.all(
-                        color: isOwner ? Colors.amber : (hasMyReq ? Colors.blue[300]! : Colors.grey[300]!),
-                        width: isOwner || hasMyReq ? 2 : 1,
-                      ),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    padding: const EdgeInsets.all(10),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        Expanded(child: Text(item['item_name'],
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                            maxLines: 1, overflow: TextOverflow.ellipsis)),
-                        if (isOwner && pendingCount > 0)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10)),
-                            child: Text('$pendingCount', style: const TextStyle(color: Colors.white, fontSize: 10)),
-                          ),
-                      ]),
-                      Text('원함: ${item['want_item']}',
-                          style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        Text('${item['room']}호', style: TextStyle(fontSize: 10, color: Colors.grey[500])),
-                        if (hasMyReq)
-                          const Text('신청중', style: TextStyle(fontSize: 10, color: Colors.blue)),
-                        if (isOwner)
-                          const Text('내 물건', style: TextStyle(fontSize: 10, color: Colors.amber)),
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const SizedBox(height: 36),
+                      const Row(children: [
+                        Text('🔄', style: TextStyle(fontSize: 28)),
+                        SizedBox(width: 10),
+                        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('물물찬', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                          Text('기숙사 물물교환 마켓', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                        ]),
                       ]),
                     ]),
                   ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          // 교환 완료 목록
-          if (traded.isNotEmpty) ...[
-            const Text('✅ 교환 확정', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            const SizedBox(height: 8),
-            ...traded.map((item) {
-              final acc = _requests.firstWhere((r) =>
-                  r['item_id'] == item['id'] && r['status'] == 'accepted', orElse: () => {});
-              return Card(
-                color: Colors.green[50],
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: const Icon(Icons.handshake, color: Colors.green),
-                  title: Text(item['item_name']),
-                  subtitle: Text('${item['room']}호 ↔ ${acc['from_room'] ?? '?'}호'),
-                  trailing: item['room'] == widget.myRoom
-                    ? TextButton(
-                        onPressed: () async {
-                          await _post('/api/trade/complete', {'item_id': item['id']});
-                        },
-                        child: const Text('완료', style: TextStyle(color: Colors.green)),
-                      )
-                    : null,
                 ),
-              );
-            }),
-          ],
+              ),
+            ),
+            actions: [
+              if (incomingCount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Stack(children: [
+                    IconButton(icon: const Icon(Icons.notifications, color: Colors.white), onPressed: _poll),
+                    Positioned(right: 8, top: 8, child: Container(
+                      width: 14, height: 14,
+                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                      child: Center(child: Text('$incomingCount',
+                          style: const TextStyle(color: Colors.white, fontSize: 8))),
+                    )),
+                  ]),
+                ),
+              IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _poll),
+            ],
+          ),
+
+          // ── 통계 바 ───────────────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Container(
+              color: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+                _statChip('교환 가능', '${available.length}개', Colors.amber),
+                Container(width: 1, height: 28, color: Colors.grey[200]),
+                _statChip('내 신청', '${myPending.length + myAccepted.length}건', Colors.blue),
+                Container(width: 1, height: 28, color: Colors.grey[200]),
+                _statChip('교환 완료', '${traded.length}건', Colors.green),
+              ]),
+            ),
+          ),
+
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+
+                // ── 내 신청 현황 ────────────────────────────────────────────
+                if (myAccepted.isNotEmpty || myPending.isNotEmpty) ...[
+                  _sectionTitle('📋 내 신청 현황'),
+                  const SizedBox(height: 8),
+                  ...myAccepted.map((r) {
+                    final item = _items.firstWhere((t) => t['id'] == r['item_id'], orElse: () => <String, dynamic>{});
+                    return _statusCard(
+                      icon: Icons.check_circle, iconColor: Colors.green,
+                      color: Colors.green[50]!, borderColor: Colors.green[200]!,
+                      title: '${item['item_name'] ?? '?'} ← ${r['offer_item']}',
+                      subtitle: '교환 확정! ${item['room'] ?? ''}호',
+                      extra: (r['meet_place'] as String? ?? '').isNotEmpty
+                          ? '📍 만남 장소: ${r['meet_place']}' : null,
+                    );
+                  }),
+                  ...myPending.map((r) {
+                    final item = _items.firstWhere((t) => t['id'] == r['item_id'], orElse: () => <String, dynamic>{});
+                    return _statusCard(
+                      icon: Icons.hourglass_top, iconColor: Colors.orange,
+                      color: Colors.orange[50]!, borderColor: Colors.orange[200]!,
+                      title: '${item['item_name'] ?? '?'} ← ${r['offer_item']}',
+                      subtitle: '${item['room'] ?? ''}호 · 승인 대기 중',
+                      trailing: TextButton(
+                        onPressed: () async => await _post('/api/trade/cancel',
+                            {'request_id': r['id'], 'from_room': widget.myRoom}),
+                        child: const Text('취소', style: TextStyle(color: Colors.red, fontSize: 12)),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 8),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                ],
+
+                // ── 교환 가능 목록 ───────────────────────────────────────────
+                if (available.isEmpty && traded.isEmpty && myPending.isEmpty && myAccepted.isEmpty)
+                  _emptyState()
+                else if (available.isNotEmpty) ...[
+                  _sectionTitle('🟡 교환 가능한 물건 ${available.length}개'),
+                  const SizedBox(height: 10),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2, childAspectRatio: 1.1,
+                      crossAxisSpacing: 10, mainAxisSpacing: 10,
+                    ),
+                    itemCount: available.length,
+                    itemBuilder: (_, i) => _tradeCard(available[i]),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+
+                // ── 교환 확정 대기 ───────────────────────────────────────────
+                if (traded.isNotEmpty) ...[
+                  _sectionTitle('🤝 교환 확정 대기'),
+                  const SizedBox(height: 8),
+                  ...traded.map((item) {
+                    final acc = _requests.firstWhere((r) =>
+                        r['item_id'] == item['id'] && r['status'] == 'accepted', orElse: () => <String, dynamic>{});
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.green[50],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.green[200]!),
+                      ),
+                      child: ListTile(
+                        leading: const Text('🤝', style: TextStyle(fontSize: 24)),
+                        title: Text(item['item_name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('${item['room']}호 ↔ ${acc['from_room'] ?? '?'}호'),
+                        trailing: item['room'] == widget.myRoom
+                          ? ElevatedButton(
+                              onPressed: () async => await _post('/api/trade/complete', {'item_id': item['id']}),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green, foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              child: const Text('완료', style: TextStyle(fontSize: 12)),
+                            )
+                          : null,
+                      ),
+                    );
+                  }),
+                ],
+              ]),
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _postItem,
+        icon: const Icon(Icons.add_box_outlined),
+        label: const Text('물건 올리기', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFFFFB300),
+        foregroundColor: Colors.white,
+        elevation: 4,
+      ),
+    );
+  }
+
+  Widget _statChip(String label, String value, Color color) => Column(children: [
+    Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+    Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+  ]);
+
+  Widget _sectionTitle(String text) => Text(text,
+      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15));
+
+  Widget _emptyState() => Center(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 60),
+      child: Column(children: [
+        const Text('📦', style: TextStyle(fontSize: 64)),
+        const SizedBox(height: 16),
+        const Text('아직 올라온 물건이 없어요',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54)),
+        const SizedBox(height: 8),
+        Text('먼저 교환하고 싶은 물건을 올려보세요!',
+            style: TextStyle(fontSize: 13, color: Colors.grey[400])),
+        const SizedBox(height: 20),
+        ElevatedButton.icon(
+          onPressed: _postItem,
+          icon: const Icon(Icons.add),
+          label: const Text('첫 번째 물건 올리기'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.amber, foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          ),
+        ),
+      ]),
+    ),
+  );
+
+  Widget _tradeCard(Map item) {
+    final isOwner = item['room'] == widget.myRoom;
+    final hasMyReq = _requests.any((r) =>
+        r['item_id'] == item['id'] && r['from_room'] == widget.myRoom);
+    final pendingCount = _requests.where((r) =>
+        r['item_id'] == item['id'] && r['status'] == 'pending').length;
+    final emoji = _tradeEmoji(item['item_name']);
+
+    Color cardColor = Colors.white;
+    Color borderColor = Colors.grey[200]!;
+    if (isOwner) { cardColor = Colors.amber[50]!; borderColor = Colors.amber[300]!; }
+    else if (hasMyReq) { cardColor = Colors.blue[50]!; borderColor = Colors.blue[300]!; }
+
+    return GestureDetector(
+      onTap: () => _showItemDetail(item),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cardColor,
+          border: Border.all(color: borderColor, width: isOwner || hasMyReq ? 2 : 1),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 3))],
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text(emoji, style: const TextStyle(fontSize: 28)),
+            if (isOwner && pendingCount > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(12)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.notifications, color: Colors.white, size: 10),
+                  const SizedBox(width: 2),
+                  Text('$pendingCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                ]),
+              )
+            else if (hasMyReq)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(color: Colors.blue, borderRadius: BorderRadius.circular(12)),
+                child: const Text('신청중', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+              )
+            else if (isOwner)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(12)),
+                child: const Text('내 물건', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+              ),
+          ]),
+          const SizedBox(height: 8),
+          Text(item['item_name'],
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 3),
+          Row(children: [
+            Icon(Icons.arrow_forward, size: 11, color: Colors.grey[400]),
+            const SizedBox(width: 3),
+            Expanded(child: Text(item['want_item'],
+                style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                maxLines: 1, overflow: TextOverflow.ellipsis)),
+          ]),
+          const SizedBox(height: 6),
+          Text('${item['room']}호', style: TextStyle(fontSize: 10, color: Colors.grey[400])),
         ]),
       ),
     );
   }
+
+  Widget _statusCard({
+    required IconData icon, required Color iconColor,
+    required Color color, required Color borderColor,
+    required String title, required String subtitle,
+    String? extra, Widget? trailing,
+  }) => Container(
+    margin: const EdgeInsets.only(bottom: 8),
+    decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor)),
+    child: ListTile(
+      leading: Icon(icon, color: iconColor),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+      subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(subtitle, style: const TextStyle(fontSize: 12)),
+        if (extra != null) Text(extra, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+      ]),
+      trailing: trailing,
+    ),
+  );
 }
 
