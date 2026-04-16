@@ -567,7 +567,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   Widget _buildAdmin() {
     final pendingTier = tierRequests.where((r) => r['status'] == 'pending').length;
     return DefaultTabController(
-      length: 5,
+      length: 6,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('관리자'),
@@ -597,10 +597,21 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
               ])),
               const Tab(text: '세탁 관리'),
               const Tab(text: '물물찬'),
+              Tab(child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Text('채팅 관리'),
+                if (messages.isNotEmpty) ...[
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: Colors.blue, borderRadius: BorderRadius.circular(10)),
+                    child: Text('${messages.length}', style: const TextStyle(color: Colors.white, fontSize: 11)),
+                  ),
+                ],
+              ])),
             ],
           ),
         ),
-        body: TabBarView(children: [_adminRoomTab(), _adminScoreTab(), _adminTierTab(), _adminLaundryTab(), _adminTradeTab()]),
+        body: TabBarView(children: [_adminRoomTab(), _adminScoreTab(), _adminTierTab(), _adminLaundryTab(), _adminTradeTab(), _adminChatTab()]),
       ),
     );
   }
@@ -1093,6 +1104,156 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                           ),
                         );
                         if (ok == true) await _post('/api/admin/trade/delete', {'item_id': item['id']});
+                      },
+                    ),
+                  ]),
+                ),
+              );
+            },
+          ),
+        ),
+    ]);
+  }
+
+  // ────────────────────────────── 관리자: 채팅 관리 ──────────────────────────
+
+  Widget _adminChatTab() {
+    // 최신 메시지가 위로 오도록 reverse
+    final msgs = messages.reversed.toList();
+    return Column(children: [
+      // 상단 툴바
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(children: [
+          Expanded(
+            child: Text(
+              '전체 ${messages.length}개 메시지',
+              style: const TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+          ),
+          OutlinedButton.icon(
+            onPressed: messages.isEmpty ? null : () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('채팅 전체 삭제'),
+                  content: const Text('모든 채팅 메시지를 삭제합니다.\n이 작업은 되돌릴 수 없습니다.'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                      child: const Text('전체 삭제'),
+                    ),
+                  ],
+                ),
+              );
+              if (ok == true) await _post('/api/admin/chat/reset', {});
+            },
+            icon: const Icon(Icons.delete_sweep, color: Colors.red, size: 16),
+            label: const Text('전체 삭제', style: TextStyle(color: Colors.red, fontSize: 13)),
+            style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
+          ),
+        ]),
+      ),
+      const Divider(height: 1),
+      if (msgs.isEmpty)
+        const Expanded(child: Center(child: Text('채팅 메시지가 없습니다', style: TextStyle(color: Colors.grey))))
+      else
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            itemCount: msgs.length,
+            itemBuilder: (_, i) {
+              final m = msgs[i];
+              final room = m['room']?.toString() ?? '';
+              final msg  = m['msg']?.toString()  ?? '';
+              final time = m['time']?.toString()  ?? '';
+              return Dismissible(
+                key: ValueKey(m['id']),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 20),
+                  color: Colors.red,
+                  child: const Icon(Icons.delete, color: Colors.white),
+                ),
+                confirmDismiss: (_) async {
+                  return await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('메시지 삭제'),
+                      content: Text('"$msg"\n\n이 메시지를 삭제할까요?'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                          child: const Text('삭제'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                onDismissed: (_) => _post('/api/admin/chat/delete', {'id': m['id']}),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    border: Border(bottom: BorderSide(color: Colors.grey[100]!)),
+                  ),
+                  child: Row(children: [
+                    // 방 번호 배지
+                    Container(
+                      width: 44, height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        room,
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // 메시지 내용
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(msg,
+                            style: const TextStyle(fontSize: 14),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(time,
+                            style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // 삭제 버튼
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                      onPressed: () async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('메시지 삭제'),
+                            content: Text('"$msg"\n\n이 메시지를 삭제할까요?'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+                              ElevatedButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                                child: const Text('삭제'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (ok == true) await _post('/api/admin/chat/delete', {'id': m['id']});
                       },
                     ),
                   ]),
