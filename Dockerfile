@@ -26,9 +26,12 @@ WORKDIR /app
 COPY server.py .
 COPY --from=builder /app/build/web ./build/web
 
-# 커스텀 아이콘 강제 덮어쓰기 (빌드와 무관하게 항상 최신 아이콘 적용)
-COPY web/icons/      ./build/web/icons/
-COPY web/favicon.png ./build/web/favicon.png
+# 커스텀 아이콘 강제 덮어쓰기 (Flutter 빌드와 완전히 분리된 전용 폴더)
+COPY custom_icons/Icon-192.png         ./build/web/icons/Icon-192.png
+COPY custom_icons/Icon-maskable-192.png ./build/web/icons/Icon-maskable-192.png
+COPY custom_icons/Icon-512.png         ./build/web/icons/Icon-512.png
+COPY custom_icons/Icon-maskable-512.png ./build/web/icons/Icon-maskable-512.png
+COPY custom_icons/favicon.png          ./build/web/favicon.png
 
 RUN pip install --no-cache-dir pywebpush
 
