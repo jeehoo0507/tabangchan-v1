@@ -1,7 +1,26 @@
 #!/usr/bin/env python3
-import json, time, threading
+import json, time, threading, gzip, os, mimetypes
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from collections import defaultdict
+
+# ── 정적 파일 gzip 캐시 (서버 시작 시 미리 압축) ──────────────────────────────
+_gz_cache: dict = {}   # path -> (compressed_bytes, mime)
+
+def _precompress():
+    """build/web 의 큰 파일들 미리 gzip 압축"""
+    targets = ['.js', '.wasm', '.css', '.html', '.json']
+    base = 'build/web'
+    for root, _, files in os.walk(base):
+        for fname in files:
+            if any(fname.endswith(ext) for ext in targets):
+                fpath = os.path.join(root, fname)
+                url   = '/' + os.path.relpath(fpath, base).replace('\\', '/')
+                try:
+                    data  = open(fpath, 'rb').read()
+                    _gz_cache[url] = (gzip.compress(data, compresslevel=6), data)
+                except Exception:
+                    pass
+    print(f"[서버] {len(_gz_cache)}개 파일 gzip 압축 완료")
 
 # ── 보안 설정 ──────────────────────────────────────────────────────────────────
 ADMIN_TOKEN = "tbchan_9x2kL8mP_secret"   # admin API 인증 토큰
@@ -110,21 +129,14 @@ class Handler(SimpleHTTPRequestHandler):
             _update_laundry()
             self._json(state)
         elif self.path == "/push_sw.js":
-            # push SW는 /push-scope/ 스코프로만 동작 — Flutter SW와 충돌 방지
-            import os
-            fpath = os.path.join("build/web", "push_sw.js")
-            if os.path.exists(fpath):
-                self.send_response(200)
-                self.send_header("Content-Type", "application/javascript")
-                self.send_header("Service-Worker-Allowed", "/push-scope/")
-                self.send_header("Cache-Control", "no-cache")
-                self.end_headers()
-                with open(fpath, "rb") as f:
-                    self.wfile.write(f.read())
-            else:
-                self.send_response(404); self.end_headers()
+            # push SW: 스코프 헤더 + no-cache
+            self._serve_static("/push_sw.js", extra_headers={
+                "Service-Worker-Allowed": "/push-scope/",
+                "Cache-Control": "no-cache",
+            })
         else:
-            super().do_GET()
+            # SPA: 파일 없으면 index.html 서빙
+            self._serve_static(self.path)
 
     def do_POST(self):
         ip = self._ip()
@@ -410,6 +422,51 @@ class Handler(SimpleHTTPRequestHandler):
 
         self._json({"ok": True})
 
+    def _serve_static(self, url_path, extra_headers=None):
+        """gzip 압축 + 캐시 헤더로 정적 파일 서빙"""
+        # URL 정리 (쿼리스트링 제거)
+        clean = url_path.split('?')[0]
+        if clean == '/': clean = '/index.html'
+
+        # 캐시에서 찾기
+        entry = _gz_cache.get(clean)
+        if entry is None:
+            # 파일이 없으면 index.html (SPA 라우팅)
+            entry = _gz_cache.get('/index.html')
+            if entry is None:
+                self.send_response(404); self.end_headers(); return
+            clean = '/index.html'
+
+        gz_data, raw_data = entry
+        mime, _ = mimetypes.guess_type(clean)
+        mime = mime or 'application/octet-stream'
+
+        # 서비스워커 파일은 no-cache, 나머지 JS/WASM은 장기 캐시
+        no_cache_paths = {'/index.html', '/flutter_service_worker.js',
+                          '/flutter_bootstrap.js', '/push_sw.js', '/manifest.json'}
+        if clean in no_cache_paths:
+            cache = 'no-cache, no-store, must-revalidate'
+        elif clean.endswith(('.wasm', '.js', '.css', '.png', '.ico')):
+            cache = 'public, max-age=31536000, immutable'
+        else:
+            cache = 'public, max-age=3600'
+
+        accept_enc = self.headers.get('Accept-Encoding', '')
+        use_gzip = 'gzip' in accept_enc and len(raw_data) > 512
+
+        body = gz_data if use_gzip else raw_data
+        self.send_response(200)
+        self.send_header('Content-Type', mime)
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Cache-Control', cache)
+        if use_gzip:
+            self.send_header('Content-Encoding', 'gzip')
+        if extra_headers:
+            for k, v in extra_headers.items():
+                self.send_header(k, v)
+        self.end_headers()
+        self.wfile.write(body)
+
     def _json(self, data):
         b = json.dumps(data, ensure_ascii=False).encode()
         self.send_response(200)
@@ -431,6 +488,7 @@ class TabangServer(HTTPServer):
         else: super().handle_error(request, client_address)
 
 if __name__ == "__main__":
+    _precompress()   # 서버 시작 시 정적 파일 미리 gzip 압축
     server = TabangServer(("0.0.0.0", 8080), Handler)
     print("타방찬 서버 실행 중: http://localhost:8080")
     server.serve_forever()
