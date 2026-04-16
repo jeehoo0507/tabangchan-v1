@@ -177,6 +177,11 @@ class Handler(SimpleHTTPRequestHandler):
         ip = self._ip()
         if not _rate_ok(ip):
             self.send_response(429); self._cors(); self.end_headers(); return
+        if self.path == "/api/debug/icons":
+            info = {}
+            for f in ["build/web/icons/Icon-192.png","build/web/icons/Icon-512.png","build/web/favicon.png"]:
+                info[f] = os.path.getsize(f) if os.path.exists(f) else "MISSING"
+            self._json(info); return
         if self.path == "/api/state":
             _update_laundry()
             self._json(state)
