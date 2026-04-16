@@ -15,10 +15,6 @@ COPY web/   web/
 
 RUN flutter build web --release
 
-# 아이콘을 빌드 결과에 강제 덮어쓰기 (Flutter 빌드가 덮어쓰는 경우 방지)
-COPY web/icons/    build/web/icons/
-COPY web/favicon.png build/web/favicon.png
-
 # ─────────────────────────────────────────────
 # Stage 2: Python 서버 실행
 # ─────────────────────────────────────────────
@@ -29,6 +25,10 @@ WORKDIR /app
 # 빌드된 웹 파일 + 서버 복사
 COPY server.py .
 COPY --from=builder /app/build/web ./build/web
+
+# 커스텀 아이콘 강제 덮어쓰기 (빌드와 무관하게 항상 최신 아이콘 적용)
+COPY web/icons/      ./build/web/icons/
+COPY web/favicon.png ./build/web/favicon.png
 
 RUN pip install --no-cache-dir pywebpush
 
