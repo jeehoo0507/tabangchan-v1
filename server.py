@@ -200,6 +200,34 @@ class Handler(SimpleHTTPRequestHandler):
                 self.wfile.write(open(fpath, "rb").read())
             else:
                 self.send_response(404); self.end_headers()
+        elif self.path == "/flutter_service_worker.js":
+            # 서비스 워커는 항상 최신 버전 확인하도록 no-cache 강제
+            fpath = "build/web/flutter_service_worker.js"
+            if os.path.exists(fpath):
+                body = open(fpath, "rb").read()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/javascript")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.send_header("Pragma", "no-cache")
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self.send_response(404); self.end_headers()
+        elif self.path in ("/flutter.js", "/manifest.json"):
+            # flutter.js, manifest도 캐시 금지
+            fpath = f"build/web{self.path}"
+            if os.path.exists(fpath):
+                ctype = "application/javascript" if self.path.endswith(".js") else "application/json"
+                body = open(fpath, "rb").read()
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self.send_response(404); self.end_headers()
         else:
             super().do_GET()
 
