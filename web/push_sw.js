@@ -1,7 +1,6 @@
 // 타방찬 Push Service Worker
-
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', e => e.waitUntil(clients.claim()));
+// 주의: scope는 /push-scope/ — Flutter SW(/flutter_service_worker.js)와 충돌 방지
+// install/activate/fetch 없음 → Flutter SW의 캐싱 로직 그대로 유지
 
 self.addEventListener('push', function(event) {
   let data = { title: '타방찬', body: '새 알림이 있습니다.' };

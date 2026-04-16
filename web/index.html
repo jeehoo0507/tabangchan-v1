@@ -1,66 +1,127 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
-
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="기숙사 타방 관리 앱">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- iOS meta tags & icons -->
+  <!-- PWA / iOS -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="타방찬">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
-
   <title>타방찬</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #ffffff; }
+
+    #_tb_loading {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+      z-index: 99999;
+    }
+    #_tb_loading .logo {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+    #_tb_loading .title {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: #222;
+      margin-bottom: 6px;
+    }
+    #_tb_loading .sub {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      color: #aaa;
+      margin-bottom: 32px;
+    }
+    #_tb_loading .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #FFE082;
+      border-top-color: #FFB300;
+      border-radius: 50%;
+      animation: tb-spin 0.7s linear infinite;
+    }
+    @keyframes tb-spin { to { transform: rotate(360deg); } }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+  <!-- 로딩 화면: Flutter 초기화 전 표시 -->
+  <div id="_tb_loading">
+    <div class="logo">🏠</div>
+    <div class="title">타방찬</div>
+    <div class="sub">기숙사 생활의 중심</div>
+    <div class="spinner"></div>
+  </div>
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <!-- Flutter 앱 -->
   <script src="flutter_bootstrap.js" async></script>
+
   <script>
-    // Push Service Worker 등록
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
-      navigator.serviceWorker.register('/push_sw.js', { scope: '/' })
-        .then(reg => { window._pushSwReg = reg; })
-        .catch(e => console.warn('push SW 등록 실패:', e));
+    // ── Push Service Worker 등록 (/push-scope/ 로 Flutter SW와 분리) ──────────
+    // 핵심: push_sw.js는 /push-scope/ 스코프로만 활성화 → Flutter의
+    // flutter_service_worker.js(/ 스코프)와 충돌 없음.
+    // 푸시 이벤트는 스코프 무관하게 구독을 만든 SW로 전달됨.
+    if ('serviceWorker' in navigator) {
+      // 먼저 기존 push SW 등록 정리 (이전 버전이 / 스코프로 등록되어 있을 수 있음)
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        for (const reg of regs) {
+          if (reg.active && reg.active.scriptURL.includes('push_sw.js')
+              && !reg.scope.includes('push-scope')) {
+            reg.unregister();
+          }
+        }
+      });
+
+      // push_sw.js를 /push-scope/ 에만 등록
+      if ('PushManager' in window) {
+        navigator.serviceWorker.register('/push_sw.js', { scope: '/push-scope/' })
+          .then(reg => {
+            window._pushSwReg = reg;
+          })
+          .catch(e => console.warn('push SW 등록 실패:', e));
+      }
     }
 
-    // Flutter에서 호출할 구독 함수
+    // Flutter에서 호출할 push 구독 함수
     window.subscribePush = function(vapidPublicKey) {
       return new Promise((resolve, reject) => {
-        if (!window._pushSwReg) { reject('SW not ready'); return; }
-        const key = Uint8Array.from(atob(vapidPublicKey.replace(/-/g,'+').replace(/_/g,'/')),
-          c => c.charCodeAt(0));
-        window._pushSwReg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: key,
-        }).then(sub => resolve(JSON.stringify(sub.toJSON())))
-          .catch(reject);
+        // SW가 아직 준비 안 됐으면 최대 3초 대기
+        let attempts = 0;
+        const trySubscribe = () => {
+          if (window._pushSwReg) {
+            const reg = window._pushSwReg;
+            const key = Uint8Array.from(
+              atob(vapidPublicKey.replace(/-/g, '+').replace(/_/g, '/')),
+              c => c.charCodeAt(0)
+            );
+            reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: key,
+            })
+            .then(sub => resolve(JSON.stringify(sub.toJSON())))
+            .catch(reject);
+          } else if (attempts++ < 30) {
+            setTimeout(trySubscribe, 100); // 100ms씩 최대 3초 재시도
+          } else {
+            reject('SW not ready after 3s');
+          }
+        };
+        trySubscribe();
       });
     };
   </script>

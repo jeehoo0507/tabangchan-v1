@@ -109,6 +109,20 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/api/state":
             _update_laundry()
             self._json(state)
+        elif self.path == "/push_sw.js":
+            # push SW는 /push-scope/ 스코프로만 동작 — Flutter SW와 충돌 방지
+            import os
+            fpath = os.path.join("build/web", "push_sw.js")
+            if os.path.exists(fpath):
+                self.send_response(200)
+                self.send_header("Content-Type", "application/javascript")
+                self.send_header("Service-Worker-Allowed", "/push-scope/")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                with open(fpath, "rb") as f:
+                    self.wfile.write(f.read())
+            else:
+                self.send_response(404); self.end_headers()
         else:
             super().do_GET()
 

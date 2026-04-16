@@ -1,10 +1,10 @@
 {
     "name": "타방찬",
     "short_name": "타방찬",
-    "start_url": ".",
+    "start_url": "/",
     "display": "standalone",
-    "background_color": "#1a1a2e",
-    "theme_color": "#1a1a2e",
+    "background_color": "#ffffff",
+    "theme_color": "#FFB300",
     "description": "기숙사 타방 관리 앱",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
