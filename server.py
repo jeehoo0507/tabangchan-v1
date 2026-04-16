@@ -486,6 +486,14 @@ class Handler(SimpleHTTPRequestHandler):
         elif self.path == "/api/admin/trade/reset":
             state["trade_items"] = []; state["trade_requests"] = []
 
+        # ── admin: 채팅 관리 ──────────────────────────────────────────────────
+        elif self.path == "/api/admin/chat/delete":
+            mid = body.get("id")
+            state["messages"] = [m for m in state["messages"] if m["id"] != mid]
+
+        elif self.path == "/api/admin/chat/reset":
+            state["messages"] = []
+
         # 변경사항 저장 예약
         _schedule_save()
         self._json({"ok": True})
