@@ -527,6 +527,24 @@ class Handler(SimpleHTTPRequestHandler):
         elif self.path == "/api/admin/chat/reset":
             state["messages"] = []
 
+        # ── admin: 공지 푸시 알림 ──────────────────────────────────────────────
+        elif self.path == "/api/admin/notify":
+            title = _clean(body.get("title", "📢 타방찬 공지"), 50)
+            msg   = _clean(body.get("msg", ""), 200)
+            room  = body.get("room", "all")
+            if not msg:
+                self._json({"ok": False, "error": "empty_msg"}); return
+            if room == "all":
+                rooms = list(_push_subs.keys())
+                for r in rooms:
+                    _send_push(r, title, msg)
+                self._json({"ok": True, "sent": len(rooms)}); return
+            else:
+                if room not in VALID_ROOMS:
+                    self._json({"ok": False, "error": "invalid_room"}); return
+                _send_push(room, title, msg)
+                self._json({"ok": True, "sent": 1}); return
+
         # 변경사항 저장 예약
         _schedule_save()
         self._json({"ok": True})

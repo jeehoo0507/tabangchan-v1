@@ -567,7 +567,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   Widget _buildAdmin() {
     final pendingTier = tierRequests.where((r) => r['status'] == 'pending').length;
     return DefaultTabController(
-      length: 6,
+      length: 7,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('관리자'),
@@ -608,10 +608,11 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                   ),
                 ],
               ])),
+              const Tab(text: '📢 공지'),
             ],
           ),
         ),
-        body: TabBarView(children: [_adminRoomTab(), _adminScoreTab(), _adminTierTab(), _adminLaundryTab(), _adminTradeTab(), _adminChatTab()]),
+        body: TabBarView(children: [_adminRoomTab(), _adminScoreTab(), _adminTierTab(), _adminLaundryTab(), _adminTradeTab(), _adminChatTab(), _adminNotifyTab()]),
       ),
     );
   }
@@ -1263,6 +1264,138 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
           ),
         ),
     ]);
+  }
+
+  // ────────────────────────────── 관리자: 공지 알림 ──────────────────────────
+
+  Widget _adminNotifyTab() {
+    final _titleCtrl  = TextEditingController();
+    final _msgCtrl    = TextEditingController();
+    String _targetRoom = 'all';
+
+    return StatefulBuilder(builder: (ctx, setSt) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // 안내
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.amber[50],
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.amber[200]!),
+            ),
+            child: const Row(children: [
+              Icon(Icons.info_outline, color: Colors.amber, size: 18),
+              SizedBox(width: 8),
+              Expanded(child: Text(
+                '알림을 허용한 기기에만 전송됩니다.',
+                style: TextStyle(fontSize: 12, color: Colors.black87),
+              )),
+            ]),
+          ),
+          const SizedBox(height: 20),
+
+          // 제목
+          const Text('제목', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _titleCtrl,
+            decoration: InputDecoration(
+              hintText: '예) 📢 타방찬 공지',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 내용
+          const Text('내용', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _msgCtrl,
+            maxLines: 4,
+            maxLength: 200,
+            decoration: InputDecoration(
+              hintText: '공지 내용을 입력하세요',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 대상 선택
+          const Text('전송 대상', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _targetRoom,
+                isExpanded: true,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                borderRadius: BorderRadius.circular(8),
+                items: [
+                  const DropdownMenuItem(value: 'all', child: Text('📢 전체 방 (알림 허용한 모든 기기)')),
+                  ...allRoomIds.map((r) => DropdownMenuItem(value: r, child: Text('$r호'))),
+                ],
+                onChanged: (v) { if (v != null) setSt(() => _targetRoom = v); },
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // 전송 버튼
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                final title = _titleCtrl.text.trim().isEmpty ? '📢 타방찬 공지' : _titleCtrl.text.trim();
+                final msg   = _msgCtrl.text.trim();
+                if (msg.isEmpty) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('내용을 입력해주세요')));
+                  return;
+                }
+                try {
+                  final res = await http.post(
+                    Uri.parse('$_base/api/admin/notify'),
+                    headers: {'Content-Type': 'application/json', 'X-Admin-Token': _adminToken},
+                    body: jsonEncode({'title': title, 'msg': msg, 'room': _targetRoom}),
+                  );
+                  final data = jsonDecode(res.body);
+                  final sent = data['sent'] ?? 0;
+                  _titleCtrl.clear(); _msgCtrl.clear();
+                  setSt(() => _targetRoom = 'all');
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                      content: Text('✅ $sent개 기기에 알림 전송 완료'),
+                      backgroundColor: Colors.green,
+                    ));
+                  }
+                } catch (_) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(content: Text('전송 실패'), backgroundColor: Colors.red));
+                  }
+                }
+              },
+              icon: const Icon(Icons.send),
+              label: Text(_targetRoom == 'all' ? '전체 알림 보내기' : '$_targetRoom호에 알림 보내기'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+        ]),
+      );
+    });
   }
 
   // state_ getter: 폴링된 전체 상태 (세탁 탭에서 사용)
