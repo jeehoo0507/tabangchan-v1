@@ -570,7 +570,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       length: 7,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('관리자'),
+          title: const Text('관리자 v7'),
           actions: [
             TextButton(
               onPressed: () { _timer?.cancel(); setState(() { myRoom = null; isAdmin = false; }); },
