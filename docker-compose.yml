@@ -5,3 +5,8 @@ services:
     ports:
       - "8080:8080"
     restart: unless-stopped
+    volumes:
+      - tabangchan_data:/app/data
+
+volumes:
+  tabangchan_data:
