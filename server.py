@@ -191,7 +191,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/javascript")
             self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+            self.send_header("Cache-Control", "no-cache, must-revalidate")
             if use_gz: self.send_header("Content-Encoding", "gzip")
             self.end_headers(); self.wfile.write(body)
         elif self.path == "/push_sw.js":
