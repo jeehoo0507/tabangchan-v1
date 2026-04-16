@@ -57,11 +57,15 @@
   <script src="flutter_bootstrap.js" async></script>
 
   <script>
-    // Flutter 첫 프레임 렌더링 완료 시 로딩화면 제거
-    window.addEventListener('flutter-first-frame', function() {
+    // 최소 2.5초 표시 + Flutter 첫 프레임 둘 다 충족 시 로딩화면 제거
+    var _tbReady = false, _tbTimer = false;
+    function _tbHide() {
+      if (!_tbReady || !_tbTimer) return;
       var el = document.getElementById('_tb_loading');
       if (el) { el.style.opacity = '0'; setTimeout(function(){ el.remove(); }, 300); }
-    });
+    }
+    setTimeout(function(){ _tbTimer = true; _tbHide(); }, 2500);
+    window.addEventListener('flutter-first-frame', function() { _tbReady = true; _tbHide(); });
 
     // Push Service Worker 등록 (/push-scope/ — Flutter SW와 충돌 방지)
     if ('serviceWorker' in navigator) {
