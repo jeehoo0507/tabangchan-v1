@@ -1,7 +1,20 @@
 #!/usr/bin/env python3
-import json, time, threading
+import json, time, threading, gzip, os
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from collections import defaultdict
+
+# main.dart.js 미리 gzip 압축해서 메모리에 올려둠 (서버 시작 시 1회)
+_main_js_gz = b""
+_main_js_len = 0
+
+def _load_main_js():
+    global _main_js_gz, _main_js_len
+    path = "build/web/main.dart.js"
+    if os.path.exists(path):
+        raw = open(path, "rb").read()
+        _main_js_gz = gzip.compress(raw, compresslevel=6)
+        _main_js_len = len(raw)
+        print(f"[서버] main.dart.js: {len(raw)//1024}KB → {len(_main_js_gz)//1024}KB ({100-len(_main_js_gz)*100//len(raw)}% 압축)")
 
 # ── 보안 설정 ──────────────────────────────────────────────────────────────────
 ADMIN_TOKEN = "tbchan_9x2kL8mP_secret"   # admin API 인증 토큰
@@ -109,6 +122,18 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/api/state":
             _update_laundry()
             self._json(state)
+        elif self.path == "/main.dart.js" and _main_js_gz:
+            # main.dart.js gzip 압축 서빙 (2.7MB → 813KB)
+            use_gz = "gzip" in self.headers.get("Accept-Encoding", "")
+            body = _main_js_gz if use_gz else open("build/web/main.dart.js", "rb").read()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/javascript")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+            if use_gz:
+                self.send_header("Content-Encoding", "gzip")
+            self.end_headers()
+            self.wfile.write(body)
         elif self.path == "/push_sw.js":
             import os
             fpath = os.path.join("build/web", "push_sw.js")
@@ -430,6 +455,7 @@ class TabangServer(HTTPServer):
         else: super().handle_error(request, client_address)
 
 if __name__ == "__main__":
+    _load_main_js()
     server = TabangServer(("0.0.0.0", 8080), Handler)
     print("타방찬 서버 실행 중: http://localhost:8080")
     server.serve_forever()
