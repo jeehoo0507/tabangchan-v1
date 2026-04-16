@@ -15,6 +15,10 @@ COPY web/   web/
 
 RUN flutter build web --release
 
+# 아이콘을 빌드 결과에 강제 덮어쓰기 (Flutter 빌드가 덮어쓰는 경우 방지)
+COPY web/icons/    build/web/icons/
+COPY web/favicon.png build/web/favicon.png
+
 # ─────────────────────────────────────────────
 # Stage 2: Python 서버 실행
 # ─────────────────────────────────────────────
