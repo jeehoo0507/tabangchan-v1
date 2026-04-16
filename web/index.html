@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <base href="/">
+  <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="기숙사 타방 관리 앱">
@@ -20,52 +20,12 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #ffffff; }
-    #_tb_loading {
-      position: fixed; inset: 0;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      background: #ffffff; z-index: 99999;
-      transition: opacity 0.3s;
-    }
-    .tb-spinner {
-      width: 36px; height: 36px;
-      border: 3px solid #FFE082; border-top-color: #FFB300;
-      border-radius: 50%;
-      animation: tb-spin 0.7s linear infinite;
-      margin-top: 24px;
-    }
-    @keyframes tb-spin { to { transform: rotate(360deg); } }
-    .tb-title {
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      font-size: 20px; font-weight: 700; color: #222; margin-top: 16px;
-    }
-    .tb-sub {
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      font-size: 13px; color: #aaa; margin-top: 6px;
-    }
   </style>
 </head>
 <body>
-  <div id="_tb_loading">
-    <img src="icons/Icon-192.png" width="88" height="88"
-         style="border-radius:20px; box-shadow:0 4px 16px rgba(0,0,0,0.12);" alt="타방찬">
-    <div class="tb-title">타방찬</div>
-    <div class="tb-sub">기숙사 생활의 중심</div>
-    <div class="tb-spinner"></div>
-  </div>
-
   <script src="flutter_bootstrap.js" async></script>
 
   <script>
-    // 최소 2.5초 표시 + Flutter 첫 프레임 둘 다 충족 시 로딩화면 제거
-    var _tbReady = false, _tbTimer = false;
-    function _tbHide() {
-      if (!_tbReady || !_tbTimer) return;
-      var el = document.getElementById('_tb_loading');
-      if (el) { el.style.opacity = '0'; setTimeout(function(){ el.remove(); }, 300); }
-    }
-    setTimeout(function(){ _tbTimer = true; _tbHide(); }, 2500);
-    window.addEventListener('flutter-first-frame', function() { _tbReady = true; _tbHide(); });
 
     // Push Service Worker 등록 (/push-scope/ — Flutter SW와 충돌 방지)
     if ('serviceWorker' in navigator) {
