@@ -1480,21 +1480,34 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(children: [
-            Expanded(
-              child: SegmentedButton<int>(
-                segments: [
-                  const ButtonSegment(value: 0, label: Text('타방 내역')),
-                  ButtonSegment(value: 1, label: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Text('신청/채팅'),
-                  ])),
-                ],
-                selected: {_tabangTab},
-                onSelectionChanged: (s) => setState(() => _tabangTab = s.first),
-                style: SegmentedButton.styleFrom(
-                  selectedBackgroundColor: Colors.black, selectedForegroundColor: Colors.white,
+            Expanded(child: GestureDetector(
+              onTap: () => setState(() => _tabangTab = 0),
+              child: Container(
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _tabangTab == 0 ? Colors.black : Colors.grey[100],
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
+                  border: Border.all(color: Colors.grey[300]!),
                 ),
+                alignment: Alignment.center,
+                child: Text('타방 내역', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                    color: _tabangTab == 0 ? Colors.white : Colors.black87)),
               ),
-            ),
+            )),
+            Expanded(child: GestureDetector(
+              onTap: () => setState(() => _tabangTab = 1),
+              child: Container(
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _tabangTab == 1 ? Colors.black : Colors.grey[100],
+                  borderRadius: const BorderRadius.horizontal(right: Radius.circular(8)),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                alignment: Alignment.center,
+                child: Text('신청/채팅', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                    color: _tabangTab == 1 ? Colors.white : Colors.black87)),
+              ),
+            )),
           ]),
         ),
         Expanded(child: _tabangTab == 0 ? _buildHistoryTab() : _buildChatTab()),
