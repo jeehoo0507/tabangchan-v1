@@ -1509,18 +1509,49 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: SegmentedButton<int>(
-            segments: const [
-              ButtonSegment(value: 0, label: Text('내 내역')),
-              ButtonSegment(value: 1, label: Text('전체 내역')),
-            ],
-            selected: {_histMode},
-            onSelectionChanged: (s) => setState(() => _histMode = s.first),
-            style: SegmentedButton.styleFrom(
-              selectedBackgroundColor: Colors.black, selectedForegroundColor: Colors.white,
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+          child: Row(children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _histMode = 0),
+                child: Container(
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: _histMode == 0 ? Colors.black : Colors.grey[100],
+                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text('내 내역',
+                    style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600,
+                      color: _histMode == 0 ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _histMode = 1),
+                child: Container(
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: _histMode == 1 ? Colors.black : Colors.grey[100],
+                    borderRadius: const BorderRadius.horizontal(right: Radius.circular(8)),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text('전체 내역',
+                    style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600,
+                      color: _histMode == 1 ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ]),
         ),
         const SizedBox(height: 4),
         Expanded(
